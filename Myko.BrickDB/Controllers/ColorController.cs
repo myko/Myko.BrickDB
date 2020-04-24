@@ -42,14 +42,14 @@ namespace Myko.BrickDB.Controllers
         }
 
         [HttpGet("{id}/elements")]
-        public async Task<ActionResult<IEnumerable<ElementView>>> GetColorElements(string id)
+        public async Task<ActionResult<IEnumerable<ElementLinkView>>> GetColorElements(string id)
         {
             if (!await _context.Colors.AnyAsync(x => x.ColorId == id))
                 return NotFound();
 
             var elements = await _context.Elements
                 .Where(x => x.Color != null && x.Color.ColorId == id)
-                .Select(x => new ElementView
+                .Select(x => new ElementLinkView
                 {
                     ElementId = x.ElementId,
                     Description = x.Description,
@@ -58,7 +58,7 @@ namespace Myko.BrickDB.Controllers
 
             foreach (var element in elements)
             {
-                element.Link = new Link(_linkGenerator.GetUriByAction(HttpContext, "GetDesign", "Design", values: new { id = element.ElementId }), "element", "GET");
+                element.Link = new Link(_linkGenerator.GetUriByAction(HttpContext, "GetElement", "Element", values: new { id = element.ElementId }), "element", "GET");
             }
 
             return elements;
@@ -85,13 +85,6 @@ namespace Myko.BrickDB.Controllers
     {
         public string? ColorId { get; set; }
         public string? Description { get; set; }
-    }
-
-    public class ElementView
-    {
-        public string? ElementId { get; set; }
-        public string? Description { get; set; }
-        public Link? Link { get; set; }
     }
 
     public class ColorListView

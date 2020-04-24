@@ -41,14 +41,14 @@ namespace Myko.BrickDB.Controllers
         }
 
         [HttpGet("{id}/elements")]
-        public async Task<ActionResult<IEnumerable<ElementView>>> GetDesignElements(string id)
+        public async Task<ActionResult<IEnumerable<ElementLinkView>>> GetDesignElements(string id)
         {
             if (!await _context.Designs.AnyAsync(x => x.DesignId == id))
                 return NotFound();
 
             var elements = await _context.Elements
                 .Where(x => x.Design != null && x.Design.DesignId == id)
-                .Select(x => new ElementView
+                .Select(x => new ElementLinkView
                 {
                     ElementId = x.ElementId,
                     Description = x.Description,
@@ -57,7 +57,7 @@ namespace Myko.BrickDB.Controllers
 
             foreach (var element in elements)
             {
-                element.Link = new Link(_linkGenerator.GetUriByAction(HttpContext, "GetDesign", "Design", values: new { id = element.ElementId }), "element", "GET");
+                element.Link = new Link(_linkGenerator.GetUriByAction(HttpContext, "GetElement", "Element", values: new { id = element.ElementId }), "element", "GET");
             }
 
             return elements;
