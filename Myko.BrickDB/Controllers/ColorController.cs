@@ -11,14 +11,13 @@ namespace Myko.BrickDB.Controllers
 {
     [Route("api/v1/colors")]
     [ApiController]
-    public class ColorController : ControllerBase
+    public class ColorController : BrickDbControllerBase<Color>
     {
-        private readonly BrickDbContext _context;
         private readonly LinkGenerator _linkGenerator;
 
         public ColorController(BrickDbContext context, LinkGenerator linkGenerator)
+            : base(context)
         {
-            _context = context;
             _linkGenerator = linkGenerator;
         }
 
@@ -31,31 +30,26 @@ namespace Myko.BrickDB.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<ColorView>> GetColor(string id)
+        public Task<ActionResult<ColorView>> GetColor(string id)
         {
-            var color = await _context.Colors
-                .Select(x => new ColorView
+            return GetSingle(
+                x => x.ColorId == id,
+                x => new ColorView
                 {
                     ColorId = x.ColorId,
                     Description = x.Description,
-                })
-                .SingleOrDefaultAsync(x => x.ColorId == id);
-
-            if (color == null)
-                return NotFound();
-
-            return color;
+                });
         }
 
         [HttpGet("{id}/elements")]
-        public async Task<ActionResult<IEnumerable<ColorElementView>>> GetColorElements(string id)
+        public async Task<ActionResult<IEnumerable<ElementView>>> GetColorElements(string id)
         {
             if (!await _context.Colors.AnyAsync(x => x.ColorId == id))
                 return NotFound();
 
             var elements = await _context.Elements
                 .Where(x => x.Color != null && x.Color.ColorId == id)
-                .Select(x => new ColorElementView
+                .Select(x => new ElementView
                 {
                     ElementId = x.ElementId,
                     Description = x.Description,
@@ -76,31 +70,14 @@ namespace Myko.BrickDB.Controllers
             if (colorPut.Description == null)
                 throw new ArgumentException();
 
-            var color = await _context.Colors.FindAsync(id);
-
-            if (color == null)
-                color = new Color(id, colorPut.Description);
-            else
-                color.Description = colorPut.Description;
-
-            _context.Colors.Add(color);
-
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetColor), new { id = color.ColorId }, color);
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<ActionResult<Color>> DeleteColor(string id)
-        {
-            var color = await _context.Colors.FindAsync(id);
-            if (color == null)
-                return NotFound();
-
-            _context.Colors.Remove(color);
-            await _context.SaveChangesAsync();
-
-            return color;
+            return await PutSingle(
+                id,
+                () => new Color(id, colorPut.Description),
+                x =>
+                {
+                    x.Description = colorPut.Description;
+                },
+                nameof(GetColor));
         }
     }
 
@@ -110,7 +87,7 @@ namespace Myko.BrickDB.Controllers
         public string? Description { get; set; }
     }
 
-    public class ColorElementView
+    public class ElementView
     {
         public string? ElementId { get; set; }
         public string? Description { get; set; }

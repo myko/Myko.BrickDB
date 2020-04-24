@@ -2,86 +2,98 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Myko.BrickDB;
 
 namespace Myko.BrickDB.Controllers
 {
     [Route("api/v1/designs")]
     [ApiController]
-    public class DesignController : ControllerBase
+    public class DesignController : BrickDbControllerBase<Design>
     {
-        private readonly BrickDbContext _context;
+        private readonly LinkGenerator _linkGenerator;
 
-        public DesignController(BrickDbContext context)
+        public DesignController(BrickDbContext context, LinkGenerator linkGenerator)
+            : base(context)
         {
-            _context = context;
+            _linkGenerator = linkGenerator;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Design>>> GetDesigns()
+        public async Task<ActionResult<IEnumerable<DesignListView>>> GetDesigns()
         {
-            return await _context.Designs.ToListAsync();
+            return await _context.Designs
+                .Select(x => new DesignListView { DesignId = x.DesignId, Description = x.Description })
+                .ToListAsync();
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Design>> GetDesign(string id)
+        public Task<ActionResult<DesignView>> GetDesign(string id)
         {
-            var design = await _context.Designs.FindAsync(id);
+            return GetSingle(
+                x => x.DesignId == id,
+                x => new DesignView
+                {
+                    DesignId = x.DesignId,
+                    Description = x.Description,
+                });
+        }
 
-            if (design == null)
-            {
+        [HttpGet("{id}/elements")]
+        public async Task<ActionResult<IEnumerable<ElementView>>> GetDesignElements(string id)
+        {
+            if (!await _context.Designs.AnyAsync(x => x.DesignId == id))
                 return NotFound();
+
+            var elements = await _context.Elements
+                .Where(x => x.Design != null && x.Design.DesignId == id)
+                .Select(x => new ElementView
+                {
+                    ElementId = x.ElementId,
+                    Description = x.Description,
+                })
+                .ToListAsync();
+
+            foreach (var element in elements)
+            {
+                element.Link = new Link(_linkGenerator.GetUriByAction(HttpContext, "GetDesign", "Design", values: new { id = element.ElementId }), "element", "GET");
             }
 
-            return design;
+            return elements;
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutDesign(string id, Design design)
+        public async Task<IActionResult> PutDesign(string id, DesignPut designPut)
         {
-            if (colorPut.Description == null)
+            if (designPut.Description == null)
                 throw new ArgumentException();
 
-            var color = await _context.Colors.FindAsync(id);
-
-            if (color == null)
-                color = new Color(id, colorPut.Description);
-            else
-                color.Description = colorPut.Description;
-
-            _context.Colors.Add(color);
-
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetColor), new { id = color.ColorId }, color);
+            return await PutSingle(
+                id,
+                () => new Design(id, designPut.Description),
+                x =>
+                {
+                    x.Description = designPut.Description;
+                },
+                nameof(GetDesign));
         }
+    }
 
-        [HttpDelete("{id}")]
-        public async Task<ActionResult<Design>> DeleteDesign(string id)
-        {
-            var design = await _context.Designs.FindAsync(id);
-            if (design == null)
-            {
-                return NotFound();
-            }
+    public class DesignView
+    {
+        public string DesignId { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
 
-            _context.Designs.Remove(design);
-            await _context.SaveChangesAsync();
-
-            return design;
-        }
-
-        private bool DesignExists(string id)
-        {
-            return _context.Designs.Any(e => e.DesignId == id);
-        }
+    public class DesignListView
+    {
+        public string DesignId { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
     }
 
     public class DesignPut
     {
-
+        public string? Description { get; set; }
     }
 }
